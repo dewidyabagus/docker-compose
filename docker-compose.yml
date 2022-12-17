@@ -1,0 +1,153 @@
+version: "3.8"
+
+services:
+  # PRODUCT SERVICE
+  # Database
+  pgsql-product:
+    image: postgres:14-alpine3.16
+    container_name: pgsql-product
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.1"
+          memory: 100m
+        limits:
+          cpus: "0.2"
+          memory: 200m
+    ports:
+      - "5440:5432"
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_PASSWORD: qwerty
+    volumes:
+      - type: volume
+        source: product_vol
+        target: "/var/lib/postgresql/data"
+        read_only: false
+    networks:
+      - product_net
+    healthcheck:
+      start_period: 10s
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      test: ["CMD", "pg_isready"]
+    restart: on-failure
+  # Service
+  http-product:
+    build:
+      context: "./svc-product"
+      dockerfile: Dockerfile
+    image: svc-product:local
+    container_name: http-product
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.05"
+          memory: 50m
+        limits:
+          cpus: "0.1"
+          memory: 100m
+    env_file:
+      - ./svc-product/.docker.env
+    networks:
+      - product_net
+    depends_on:
+      pgsql-product:
+        condition: service_healthy
+    restart: on-failure
+  
+  # PAYMENT SERVICES
+  # Database
+  pgsql-payment:
+    image: postgres:14-alpine3.16
+    container_name: pgsql-payment
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.1"
+          memory: 100m
+        limits:
+          cpus: "0.2"
+          memory: 200m
+    ports:
+      - "5441:5432"
+    environment:
+      POSTGRES_DB: payments
+      POSTGRES_PASSWORD: qwerty
+    volumes:
+      - type: volume
+        source: payment_vol
+        target: "/var/lib/postgresql/data"
+        read_only: false
+    networks:
+      - payment_net
+    healthcheck:
+      start_period: 10s
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      test: ["CMD", "pg_isready"]
+  # Service
+  http-payment:
+    build:
+      context: "./svc-payment"
+      dockerfile: Dockerfile
+    image: svc-payment:local
+    container_name: http-payment
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.05"
+          memory: 50m
+        limits:
+          cpus: "0.1"
+          memory: 100m
+    env_file:
+      - "./svc-payment/.docker.env"
+    networks:
+      - payment_net
+    depends_on:
+      pgsql-payment:
+        condition: service_healthy
+    restart: on-failure
+
+  # API GATEWAY
+  api-gateway:
+    build:
+      context: "./api-gateway"
+      dockerfile: Dockerfile
+    image: proxy-api-gateway:local
+    container_name: api-gateway
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.05"
+          memory: 50m
+        limits:
+          cpus: "0.1"
+          memory: 100m
+    ports:
+      - "80:80"
+    networks:
+      - product_net
+      - payment_net
+    depends_on:
+      http-product:
+        condition: service_healthy
+      http-payment:
+        condition: service_healthy
+
+volumes:
+  product_vol:
+    name: product_vol
+  payment_vol:
+    name: payment_vol
+
+networks:
+  product_net:
+    name: product_net
+    driver: bridge
+  payment_net:
+    name: payment_net
+    driver: bridge

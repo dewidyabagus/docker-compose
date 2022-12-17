@@ -70,7 +70,7 @@ func main() {
 	})
 
 	listen := fmt.Sprintf("0.0.0.0:%s", os.Getenv("HTTP_PORT"))
-	log.Println("Starting HTTP service in", listen)
+	log.Printf("Starting HTTP service in http://%s \n", listen)
 
 	log.Fatal(http.ListenAndServe(listen, nil))
 }
